@@ -36,10 +36,14 @@ known gaps under Wine. So SE Shipyard works entirely by:
   it recognizes join-attempt and world-load lines, but has not yet observed
   (and so cannot recognize) a disconnect or chat-message log line. Everything
   unrecognized shows as a raw log line rather than being hidden.
-- **No setting a new server password.** Keen's password hash algorithm
-  (`ServerPasswordHash`/`ServerPasswordSalt`) isn't confirmed, and guessing
-  wrong would silently produce a broken password. Clearing an existing
-  password (disabling protection) is supported since that's unambiguous.
+- **Password setting is implemented but not yet verified against a real
+  client connect.** `ServerPasswordHash`/`ServerPasswordSalt` use
+  PBKDF2-HMAC-SHA1, 10,000 iterations, 16-byte random salt, 20-byte derived
+  key, base64-encoded -- confirmed against two independent sources describing
+  the same community password-generator tool for this exact purpose, and
+  matches standard .NET `Rfc2898DeriveBytes` defaults. The math checks out
+  (byte lengths, encoding) but actually joining with a password set this way
+  hasn't been tested yet -- do that once deployed, before relying on it.
 - Settings and mod changes require a container restart to take effect — the
   UI says so but does not restart automatically, so you can batch several
   changes before restarting.

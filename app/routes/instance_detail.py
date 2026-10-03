@@ -128,6 +128,13 @@ def clear_password(name: str):
     return RedirectResponse(f"/instances/{name}", status_code=303)
 
 
+@router.post("/instances/{name}/password/set")
+def set_password(name: str, password: str = Form(...)):
+    instance = _get_instance_or_404(name)
+    cfg_editor.set_password(instance.cfg_path, password)
+    return RedirectResponse(f"/instances/{name}", status_code=303)
+
+
 @router.post("/instances/{name}/mods/add")
 def add_mod(name: str, published_file_id: str = Form(...), friendly_name: str = Form("")):
     instance = _get_instance_or_404(name)

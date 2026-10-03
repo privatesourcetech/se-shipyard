@@ -59,8 +59,11 @@
     {% else %}
       disabled.
     {% endif %}
-    <br><span class="hint">Setting a new password isn't supported yet (the hash algorithm Keen uses isn't confirmed) -- only clearing is safe.</span>
   </p>
+  <form method="post" action="/instances/{{ instance.name }}/password/set" class="stacked-form">
+    <label>Set new password <input type="password" name="password" required></label>
+    <button type="submit">Set password</button>
+  </form>
   {% endif %}
 </section>
 

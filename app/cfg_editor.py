@@ -4,14 +4,19 @@ This file is small, clean XML (unlike Sandbox.sbc), so a full ElementTree
 parse/rewrite is safe here. A change only takes effect after the container
 is restarted -- callers (routes) are responsible for prompting that.
 
-Known gap: setting a NEW server password is not implemented. The game hashes
-it with an algorithm we have not confirmed (ServerPasswordHash/Salt), and
-guessing wrong would silently produce a non-working password. Clearing the
-password (removing protection entirely) is safe and is supported.
+Password hashing: ServerPasswordHash/ServerPasswordSalt use PBKDF2-HMAC-SHA1,
+10,000 iterations, a 16-byte random salt, a 20-byte derived key, both
+base64-encoded -- confirmed against two independent sources describing the
+same community-built generator tool for this exact purpose (standard .NET
+Rfc2898DeriveBytes defaults for a 20-byte SHA1-sized key). Not verified
+end-to-end against a real client connect yet -- test that once deployed.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,5 +123,17 @@ def clear_password(cfg_path: Path) -> None:
     root = tree.getroot()
     _set_text(root, "ServerPasswordHash", "")
     _set_text(root, "ServerPasswordSalt", "")
+    ET.indent(tree, space="  ")
+    tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
+
+
+def set_password(cfg_path: Path, password: str) -> None:
+    salt = os.urandom(16)
+    derived = hashlib.pbkdf2_hmac("sha1", password.encode("utf-8"), salt, 10_000, dklen=20)
+
+    tree = ET.parse(cfg_path)
+    root = tree.getroot()
+    _set_text(root, "ServerPasswordHash", base64.b64encode(derived).decode("ascii"))
+    _set_text(root, "ServerPasswordSalt", base64.b64encode(salt).decode("ascii"))
     ET.indent(tree, space="  ")
     tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
