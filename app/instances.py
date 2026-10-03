@@ -39,6 +39,11 @@ class Instance(BaseModel):
         return self.world_path / "Sandbox.sbc"
 
     @property
+    def sandbox_config_path(self) -> Path:
+        """Live, continuously-autosaved settings + mods -- see cfg_editor.py docstring."""
+        return self.world_path / "Sandbox_config.sbc"
+
+    @property
     def backup_path(self) -> Path:
         return Path(self.backup_mount)
 

@@ -30,20 +30,25 @@ def instance_detail(request: Request, name: str):
     settings_error = None
     if instance.cfg_path.exists():
         try:
-            settings = cfg_editor.read_settings(instance.cfg_path)
+            settings = cfg_editor.read_settings(instance.cfg_path, instance.sandbox_config_path)
         except Exception as exc:  # noqa: BLE001 - surface to the page, don't crash it
             settings_error = str(exc)
     else:
         settings_error = f"Config not found at {instance.cfg_path}"
 
+    # Sandbox_config.sbc is the live, continuously-autosaved copy -- prefer it
+    # for listing, falling back to Sandbox.sbc only if it doesn't exist yet.
+    mods_source = (
+        instance.sandbox_config_path if instance.sandbox_config_path.exists() else instance.sandbox_sbc_path
+    )
     mods_error = None
-    if instance.sandbox_sbc_path.exists():
+    if mods_source.exists():
         try:
-            mods = mods_editor.list_mods(instance.sandbox_sbc_path)
+            mods = mods_editor.list_mods(mods_source)
         except Exception as exc:  # noqa: BLE001
             mods_error = str(exc)
     else:
-        mods_error = f"World save not found at {instance.sandbox_sbc_path}"
+        mods_error = f"World save not found at {mods_source}"
 
     activity = []
     activity_error = None
@@ -107,7 +112,7 @@ def update_settings(
     reserved: str = Form(""),
 ):
     instance = _get_instance_or_404(name)
-    current = cfg_editor.read_settings(instance.cfg_path)
+    current = cfg_editor.read_settings(instance.cfg_path, instance.sandbox_config_path)
     current.game_mode = game_mode
     current.total_pcu = total_pcu
     current.pirate_pcu = pirate_pcu
@@ -117,7 +122,7 @@ def update_settings(
     current.administrators = _split_ids(administrators)
     current.banned = _split_ids(banned)
     current.reserved = _split_ids(reserved)
-    cfg_editor.write_settings(instance.cfg_path, current)
+    cfg_editor.write_settings(instance.cfg_path, instance.sandbox_config_path, current)
     return RedirectResponse(f"/instances/{name}", status_code=303)
 
 
@@ -135,17 +140,27 @@ def set_password(name: str, password: str = Form(...)):
     return RedirectResponse(f"/instances/{name}", status_code=303)
 
 
+def _mod_file_paths(instance):
+    """Both files carry a <Mods> block; keep them in sync (see mods_editor docstring)."""
+    return [p for p in (instance.sandbox_sbc_path, instance.sandbox_config_path) if p.exists()]
+
+
 @router.post("/instances/{name}/mods/add")
 def add_mod(name: str, published_file_id: str = Form(...), friendly_name: str = Form("")):
     instance = _get_instance_or_404(name)
-    mods_editor.add_mod(instance.sandbox_sbc_path, published_file_id.strip(), friendly_name.strip())
+    for path in _mod_file_paths(instance):
+        mods_editor.add_mod(path, published_file_id.strip(), friendly_name.strip())
     return RedirectResponse(f"/instances/{name}", status_code=303)
 
 
 @router.post("/instances/{name}/mods/{published_file_id}/remove")
 def remove_mod(name: str, published_file_id: str):
     instance = _get_instance_or_404(name)
-    mods_editor.remove_mod(instance.sandbox_sbc_path, published_file_id)
+    for path in _mod_file_paths(instance):
+        try:
+            mods_editor.remove_mod(path, published_file_id)
+        except mods_editor.ModNotFoundError:
+            pass  # fine if only one of the two files currently has it
     return RedirectResponse(f"/instances/{name}", status_code=303)
 
 

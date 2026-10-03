@@ -1,8 +1,16 @@
-"""Add/remove Workshop mods from a world's Sandbox.sbc.
+"""Add/remove Workshop mods from a world's Sandbox.sbc and/or Sandbox_config.sbc.
 
-Sandbox.sbc can be 5MB+ with large embedded grid/entity data. To avoid any risk
-of a full XML parse/reserialize subtly reformatting (or breaking) the rest of
-the file, we only ever touch the isolated <Mods>...</Mods> span: read it with
+Both files carry their own <Mods>...</Mods> block, and Sandbox_config.sbc's
+copy is the live, continuously-autosaved one that actually governs what loads
+(see cfg_editor.py's docstring for how this was confirmed against a running
+instance) -- so callers should treat Sandbox_config.sbc as authoritative for
+*listing* current mods, but write changes to BOTH files' blocks to keep them
+consistent (routes/instance_detail.py does this).
+
+Sandbox.sbc specifically can be 5MB+ with large embedded grid/entity data
+(Sandbox_config.sbc is small). To avoid any risk of a full XML parse/
+reserialize subtly reformatting (or breaking) the rest of either file, these
+functions only ever touch the isolated <Mods>...</Mods> span: read it with
 ElementTree for listing (safe, nothing is written back), but write changes as
 targeted text edits of just that span, leaving everything else byte-for-byte
 untouched.

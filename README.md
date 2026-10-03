@@ -24,9 +24,20 @@ Remote API is almost certainly built on `System.Net.HttpListener`, which has
 known gaps under Wine. So SE Shipyard works entirely by:
 
 - controlling containers directly via the Docker socket, and
-- editing each instance's files directly (`SpaceEngineers-Dedicated.cfg` for
-  settings/admins/bans, the `<Mods>` block in `Sandbox.sbc` for mods, and the
-  backup folder for restores) — the same files you'd otherwise edit by hand.
+- editing each instance's files directly — the same files you'd otherwise
+  edit by hand. This turned out to involve **two** settings files, not one:
+  `SpaceEngineers-Dedicated.cfg`'s `<SessionSettings>` is only the *initial
+  seed*, read once. From then on, confirmed directly against a live running
+  instance (caught with `GameMode=Survival` in the cfg while actually running
+  `GameMode=Creative`), the dedicated server treats `Sandbox_config.sbc` as
+  the live, continuously-autosaved source of truth for `GameMode`/PCU
+  limits/`MaxPlayers`/`MaxBackupSaves` *and* the `<Mods>` list -- its own
+  startup log says as much ("Sandbox world configuration file found,
+  overriding checkpoint settings"). So SE Shipyard reads those fields from
+  `Sandbox_config.sbc` when it exists and writes changes to both files to
+  keep them consistent. `ServerName`/`Administrators`/`Banned`/`Reserved`/the
+  password are *not* duplicated into `Sandbox_config.sbc`, so the cfg stays
+  the sole source for those.
 
 ## Known limitations
 

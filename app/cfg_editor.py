@@ -1,8 +1,27 @@
-"""Read/write SpaceEngineers-Dedicated.cfg.
+"""Read/write server settings across SpaceEngineers-Dedicated.cfg and Sandbox_config.sbc.
 
-This file is small, clean XML (unlike Sandbox.sbc), so a full ElementTree
-parse/rewrite is safe here. A change only takes effect after the container
-is restarted -- callers (routes) are responsible for prompting that.
+Confirmed directly against a live running instance: SpaceEngineers-Dedicated.cfg's
+<SessionSettings> is only the INITIAL seed, read once. From then on, the dedicated
+server treats Sandbox_config.sbc as the live, continuously-autosaved source of
+truth for session settings (GameMode, PCU, MaxPlayers, MaxBackupSaves, etc.) AND
+for the Mods list (see mods_editor.py) -- its own startup log says as much
+("Sandbox world configuration file found, overriding checkpoint settings"). A
+real instance was caught with GameMode=Survival in the cfg but GameMode=Creative
+in Sandbox_config.sbc, the latter being what was actually running.
+
+So: GameMode/TotalPCU/PiratePCU/MaxPlayers/MaxBackupSaves are read from
+Sandbox_config.sbc when it exists (falling back to the cfg only for a
+brand-new instance that has never been loaded yet), and written to BOTH --
+Sandbox_config.sbc because that's what's actually live, the cfg too so it
+isn't left stale for anyone reading it directly or if the world ever
+regenerates its config from scratch. ServerName/Administrators/Banned/Reserved
+and the password are NOT duplicated into Sandbox_config.sbc, so the cfg stays
+the sole source for those.
+
+Both files are small, clean XML (unlike Sandbox.sbc's checkpoint data), so a
+full ElementTree parse/rewrite is safe for both. A change only takes effect
+after the container is restarted -- callers (routes) are responsible for
+prompting that.
 
 Password hashing: ServerPasswordHash/ServerPasswordSalt use PBKDF2-HMAC-SHA1,
 10,000 iterations, a 16-byte random salt, a 20-byte derived key, both
@@ -55,19 +74,55 @@ def _id_list(root: ET.Element, tag: str) -> list[str]:
     return [child.text for child in el.findall("unsignedLong") if child.text]
 
 
-def read_settings(cfg_path: Path) -> ServerSettings:
+# -- Sandbox_config.sbc: live session settings (GameMode, PCU, etc.) --
+
+_LIVE_FIELDS = ("GameMode", "TotalPCU", "PiratePCU", "MaxPlayers", "MaxBackupSaves")
+
+
+def _read_live_fields(sandbox_config_path: Path) -> dict[str, str]:
+    tree = ET.parse(sandbox_config_path)
+    settings_el = tree.getroot().find("Settings")
+    if settings_el is None:
+        return {}
+    fields = {}
+    for tag in _LIVE_FIELDS:
+        el = settings_el.find(tag)
+        if el is not None and el.text is not None:
+            fields[tag] = el.text
+    return fields
+
+
+def _write_live_fields(sandbox_config_path: Path, fields: dict[str, str]) -> None:
+    tree = ET.parse(sandbox_config_path)
+    settings_el = tree.getroot().find("Settings")
+    if settings_el is None:
+        return
+    for tag, value in fields.items():
+        el = settings_el.find(tag)
+        if el is not None:
+            el.text = value
+    ET.indent(tree, space="  ")
+    tree.write(sandbox_config_path, encoding="utf-8", xml_declaration=True)
+
+
+def read_settings(cfg_path: Path, sandbox_config_path: Path) -> ServerSettings:
     tree = ET.parse(cfg_path)
     root = tree.getroot()
 
     hash_el = root.find("ServerPasswordHash")
     has_password = bool(hash_el is not None and hash_el.text)
 
+    live = _read_live_fields(sandbox_config_path) if sandbox_config_path.exists() else {}
+
+    def live_or_cfg(tag: str, cfg_default: str) -> str:
+        return live.get(tag, _session_text(root, tag, cfg_default))
+
     return ServerSettings(
-        game_mode=_session_text(root, "GameMode", "Survival"),
-        total_pcu=int(_session_text(root, "TotalPCU", "0") or 0),
-        pirate_pcu=int(_session_text(root, "PiratePCU", "0") or 0),
-        max_players=int(_session_text(root, "MaxPlayers", "4") or 4),
-        max_backup_saves=int(_session_text(root, "MaxBackupSaves", "10") or 10),
+        game_mode=live_or_cfg("GameMode", "Survival"),
+        total_pcu=int(live_or_cfg("TotalPCU", "0") or 0),
+        pirate_pcu=int(live_or_cfg("PiratePCU", "0") or 0),
+        max_players=int(live_or_cfg("MaxPlayers", "4") or 4),
+        max_backup_saves=int(live_or_cfg("MaxBackupSaves", "10") or 10),
         server_name=_text(root, "ServerName", ""),
         world_name=_text(root, "WorldName", ""),
         administrators=_id_list(root, "Administrators"),
@@ -100,7 +155,7 @@ def _set_id_list(root: ET.Element, tag: str, ids: list[str]) -> None:
         child.text = steam_id
 
 
-def write_settings(cfg_path: Path, settings: ServerSettings) -> None:
+def write_settings(cfg_path: Path, sandbox_config_path: Path, settings: ServerSettings) -> None:
     tree = ET.parse(cfg_path)
     root = tree.getroot()
 
@@ -116,6 +171,18 @@ def write_settings(cfg_path: Path, settings: ServerSettings) -> None:
 
     ET.indent(tree, space="  ")
     tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
+
+    if sandbox_config_path.exists():
+        _write_live_fields(
+            sandbox_config_path,
+            {
+                "GameMode": settings.game_mode,
+                "TotalPCU": str(settings.total_pcu),
+                "PiratePCU": str(settings.pirate_pcu),
+                "MaxPlayers": str(settings.max_players),
+                "MaxBackupSaves": str(settings.max_backup_saves),
+            },
+        )
 
 
 def clear_password(cfg_path: Path) -> None:
