@@ -1,0 +1,24 @@
+# Example only -- copy to compose.yaml (gitignored) and adjust paths for your host.
+services:
+  se-shipyard:
+    image: ghcr.io/privatesourcetech/se-shipyard:latest
+    pull_policy: always
+    container_name: se-shipyard
+    restart: unless-stopped
+
+    ports:
+      - "8070:8080"
+
+    environment:
+      TZ: "UTC"
+      # Optional: Steam Web API key for Workshop search. Can also be set in the UI.
+      # STEAM_API_KEY: ""
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /path/to/apps/se-shipyard/data:/app/data
+
+      # One pair of mounts per registered instance -- add both lines here,
+      # redeploy, then register the instance in the UI. See README.
+      - /path/to/apps/spaceengineers-<world>/server:/mnt/instances/<world>
+      - /path/to/backups/spaceengineers-<world>:/mnt/backups/<world>

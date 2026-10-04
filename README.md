@@ -59,6 +59,12 @@ known gaps under Wine. So SE Shipyard works entirely by:
   UI says so but does not restart automatically, so you can batch several
   changes before restarting.
 
+## Security warning
+
+SE Shipyard has **no authentication yet** and mounts the host's Docker socket,
+which is root-equivalent. Only expose it on a trusted LAN -- never to the
+internet -- until login support is added.
+
 ## Running locally
 
 ```
@@ -76,7 +82,7 @@ TrueNAS paths, or point them at a local copy of a test instance's files.
 
 Image is built by `.github/workflows/publish-image.yml` and published to
 `ghcr.io/privatesourcetech/se-shipyard`. Deploy through the TrueNAS Apps UI's
-**Install via YAML**, pasting `compose.yaml` — same flow already used for the
+**Install via YAML**, pasting your copy of `compose.example.yaml` (saved as `compose.yaml`, which is gitignored) — same flow already used for the
 `spaceengineers-<worldname>` instances themselves, rather than running compose
 over SSH.
 
@@ -103,8 +109,8 @@ Each instance needs two bind-mount lines added to **this app's**
 through the UI:
 
 ```yaml
-- /mnt/tank/apps/spaceengineers-<worldname>/server:/mnt/instances/<worldname>
-- /mnt/tank/backups/spaceengineers-<worldname>:/mnt/backups/<worldname>
+- /path/to/apps/spaceengineers-<worldname>/server:/mnt/instances/<worldname>
+- /path/to/backups/spaceengineers-<worldname>:/mnt/backups/<worldname>
 ```
 
 Then on the dashboard, "Add instance" with:
