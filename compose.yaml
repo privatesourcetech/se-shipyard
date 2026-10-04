@@ -1,6 +1,7 @@
 services:
   se-shipyard:
     image: ghcr.io/privatesourcetech/se-shipyard:latest
+    pull_policy: always
     container_name: se-shipyard
     restart: unless-stopped
 

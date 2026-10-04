@@ -87,6 +87,15 @@ Before first deploy:
    working precedent — this is required for clean `/var/run/docker.sock`
    access from inside the container.
 
+`pull_policy: always` on the service means every future redeploy (Edit →
+save in the Apps UI) forces a fresh registry check and pulls a newer
+`:latest` automatically. Before this was added, TrueNAS's redeploy just
+recreated the container from whatever image was already cached locally --
+confirmed directly: a container recreated after two new pushed fixes was
+still running the original pre-fix image, requiring a manual
+`docker pull ghcr.io/privatesourcetech/se-shipyard:latest` on the host to
+actually fetch the new one. That manual step shouldn't be needed anymore.
+
 ## Adding a new instance
 
 Each instance needs two bind-mount lines added to **this app's**
