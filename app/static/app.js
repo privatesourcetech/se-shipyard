@@ -11,6 +11,7 @@ const state = {
   steam: { set: false, source: null },
   ui: loadLocal("ui", { theme: "dark", bgOn: false, bgOpacity: 12, bgSeconds: 30 }),
   bgImages: [],
+  advSchema: null, advOpen: {},
   open: {}, tab: {},
   searchQ: "", searchRes: null, searching: false, searchErr: null,
   replacingKey: false,
@@ -75,6 +76,7 @@ async function loadServers() {
   state.loadError = null;
 }
 async function loadDetail(name) {
+  if (!state.advSchema) state.advSchema = await api("/advanced/schema").catch(() => []);
   const d = await api("/servers/" + encodeURIComponent(name));
   state.detail[name] = d;
   return d;
@@ -215,6 +217,7 @@ function viewDefaults() {
       <label>Max players<input name="max_players" type="number" min="1" value="${d.max_players}"></label>
       <label>Max backup saves<input name="max_backup_saves" type="number" min="0" value="${d.max_backup_saves}"></label>
       <label>Backup interval (minutes)<input name="backup_interval" type="number" min="1" value="${d.backup_interval}"></label>
+      <label class="chk" style="align-self:end;margin-bottom:14px"><input type="checkbox" name="pause_when_empty" ${d.pause_when_empty ? "checked" : ""}> Pause game when no players are online</label>
     </div>
     <div class="three">
       <label>Administrators (SteamIDs)<textarea name="administrators" rows="3">${esc(d.administrators.join("\n"))}</textarea></label>
@@ -238,6 +241,7 @@ async function saveDefaults(e) {
   e.preventDefault();
   const f = new FormData(e.target);
   const body = formToSettings(f);
+  body.pause_when_empty = f.get("pause_when_empty") === "on";
   const pw = f.get("password");
   if (pw) body.password = pw;   // omitted = keep existing
   const r = await attempt(() => api("/defaults", "PUT", body), "Default settings saved");
@@ -429,7 +433,59 @@ function tabSettings(s, d) {
       <label>Reserved<textarea name="reserved" rows="3">${esc(x.reserved.join("\n"))}</textarea></label>
     </div>
     <button class="primary" type="submit">Save settings</button>
-  </form>`;
+  </form>
+  ${advancedSection(s, d)}`;
+}
+
+/* -- advanced settings -- */
+function advField(f, v) {
+  const key = esc(f.key), label = esc(f.label), tip = esc((f.hint ? f.hint + " " : "") + f.key);
+  const search = esc((f.label + " " + f.key).toLowerCase());
+  if (f.type === "bool") {
+    return `<label class="chk adv-f" title="${tip}" data-search="${search}"><input type="checkbox" data-adv="${key}" data-type="bool" data-orig="${v ? 1 : 0}" ${v ? "checked" : ""}> ${label}</label>`;
+  }
+  if (f.type === "enum") {
+    const opts = f.options.includes(v) ? f.options : [v, ...f.options];
+    return `<label class="adv-f" title="${tip}" data-search="${search}">${label}<select data-adv="${key}" data-type="enum" data-orig="${esc(v)}">${opts.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
+  }
+  if (f.type === "text") {
+    return `<label class="adv-f" title="${tip}" data-search="${search}">${label}<input type="text" maxlength="500" data-adv="${key}" data-type="text" data-orig="${esc(v)}" value="${esc(v)}"></label>`;
+  }
+  const step = f.type === "int" ? 1 : "any";
+  return `<label class="adv-f" title="${tip}" data-search="${search}">${label}<input type="number" step="${step}" ${f.min != null ? `min="${f.min}"` : ""} ${f.max != null ? `max="${f.max}"` : ""} data-adv="${key}" data-type="${f.type}" data-orig="${v}" value="${v}"></label>`;
+}
+function advancedSection(s, d) {
+  const vals = d.advanced || {}, schema = (state.advSchema || []).filter((f) => f.key in vals);
+  if (!schema.length) return "";
+  const groups = [...new Set(schema.map((f) => f.group))];
+  return `<details class="adv" ${state.advOpen[s.name] ? "open" : ""} ontoggle="state.advOpen[${q(s.name)}]=this.open">
+    <summary>Advanced settings (${schema.length})</summary>
+    <form id="${sid(s.name)}-adv" onsubmit="saveAdvanced(event,${q(s.name)})">
+      <div class="row" style="margin:12px 0 0"><input type="search" placeholder="Filter settings…" oninput="filterAdv(this)" style="max-width:280px">
+        <span class="meta" style="color:var(--muted)">Only fields you change are written. Hover a field for its raw setting name.</span></div>
+      ${groups.map((g) => `<div class="adv-group"><h4>${esc(g)}</h4><div class="three">${schema.filter((f) => f.group === g).map((f) => advField(f, vals[f.key])).join("")}</div></div>`).join("")}
+      <button class="primary" type="submit" style="margin-top:14px">Save advanced settings</button>
+    </form></details>`;
+}
+function filterAdv(input) {
+  const needle = input.value.trim().toLowerCase(), form = input.closest("form");
+  form.querySelectorAll(".adv-f").forEach((el) => el.classList.toggle("hide", needle && !el.dataset.search.includes(needle)));
+  form.querySelectorAll(".adv-group").forEach((g) => g.classList.toggle("hide", !g.querySelector(".adv-f:not(.hide)")));
+}
+async function saveAdvanced(e, n) {
+  e.preventDefault();
+  const values = {};
+  e.target.querySelectorAll("[data-adv]").forEach((el) => {
+    const t = el.dataset.type;
+    let cur = t === "bool" ? (el.checked ? 1 : 0) : el.value;
+    if (String(cur) === el.dataset.orig) return;           // unchanged
+    if (t === "bool") values[el.dataset.adv] = !!cur;
+    else if (t === "int" || t === "float") { if (el.value === "") return; values[el.dataset.adv] = Number(el.value); }
+    else values[el.dataset.adv] = el.value;
+  });
+  if (!Object.keys(values).length) { toast("No advanced settings changed"); return; }
+  const r = await attempt(() => api(`/servers/${encodeURIComponent(n)}/advanced`, "PUT", { values }), `Saved ${Object.keys(values).length} advanced setting${Object.keys(values).length === 1 ? "" : "s"}`);
+  if (r) await refreshAll(n);
 }
 function tabMods(s, d) {
   const inUse = new Set(d.mods.map((m) => m.id));
@@ -507,6 +563,8 @@ function applyDefaults(n) {
   const set = (name, val) => { const el = form.elements[name]; if (el && String(el.value) !== String(val)) { el.value = val; el.classList.add("changed"); } };
   ["game_mode", "total_pcu", "pirate_pcu", "max_players", "max_backup_saves", "backup_interval"].forEach((k) => set(k, d[k]));
   ["administrators", "banned", "reserved"].forEach((k) => set(k, d[k].join("\n")));
+  const pause = document.querySelector(`#${sid(n)}-adv [data-adv="PauseGameWhenEmpty"]`);
+  if (pause && pause.checked !== d.pause_when_empty) { pause.checked = d.pause_when_empty; pause.closest(".adv-f").classList.add("changed-f"); state.advOpen[n] = true; const det = pause.closest("details"); if (det) det.open = true; }
   if (d.password_set && form.elements.use_default_password) { form.elements.use_default_password.checked = true; }
   toast("Defaults applied — review and press Save");
 }

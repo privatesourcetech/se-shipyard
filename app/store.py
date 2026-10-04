@@ -29,6 +29,7 @@ DEFAULT_DEFAULTS = {
     "max_players": 6,
     "max_backup_saves": 7,
     "backup_interval": 30,
+    "pause_when_empty": True,
     "administrators": [],
     "banned": [],
     "reserved": [],

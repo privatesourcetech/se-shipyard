@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app import activity_log, backgrounds, backups, cfg_editor, docker_control, mods_editor, steam, store
+from app import activity_log, advanced, backgrounds, backups, cfg_editor, docker_control, mods_editor, steam, store
 from app import instances as registry
 from app.instances import Instance
 
@@ -190,6 +190,7 @@ def add_server(body: NewServer):
         settings = _read_settings(instance)
         _apply_defaults_to(settings, store.get_defaults())
         cfg_editor.write_settings(instance.cfg_path, instance.sandbox_config_path, settings)
+        _apply_default_advanced(instance, store.get_defaults())
     return _summary(instance)
 
 
@@ -212,6 +213,10 @@ def server_detail(name: str):
         d = details[m["id"]]
         m.update(name=d["name"] if not d["name"].startswith("Workshop item") else (m["friendly_name"] or d["name"]),
                  description=d["description"], preview_url=d["preview_url"], url=d["url"])
+    try:
+        summary["advanced"] = advanced.read_values(instance.cfg_path, instance.sandbox_config_path)
+    except Exception:  # noqa: BLE001 - the main settings error already surfaces via summary["error"]
+        summary["advanced"] = {}
     summary["backups"] = [
         {"name": b.name, "modified": b.modified.strftime("%Y-%m-%d %H:%M:%S")}
         for b in backups.list_backups(instance)
@@ -264,6 +269,38 @@ def save_settings(name: str, body: SettingsIn):
 
     store.mark_pending(instance.name)
     return _summary(instance)
+
+
+@router.get("/advanced/schema")
+def advanced_schema():
+    return advanced.schema_json()
+
+
+class AdvancedIn(BaseModel):
+    values: dict[str, bool | int | float | str]
+
+
+@router.put("/servers/{name}/advanced")
+def save_advanced(name: str, body: AdvancedIn):
+    instance = _instance_or_404(name)
+    if not instance.cfg_path.exists():
+        raise HTTPException(404, f"Config not found at {instance.cfg_path}")
+    current = advanced.read_values(instance.cfg_path, instance.sandbox_config_path)
+    try:
+        clean = advanced.validate(body.values, current)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    advanced.write_values(instance.cfg_path, instance.sandbox_config_path, clean)
+    store.mark_pending(instance.name)
+    return {"saved": len(clean), "advanced": advanced.read_values(instance.cfg_path, instance.sandbox_config_path)}
+
+
+def _apply_default_advanced(instance: Instance, d: dict) -> None:
+    current = advanced.read_values(instance.cfg_path, instance.sandbox_config_path)
+    if "PauseGameWhenEmpty" in current:
+        advanced.write_values(
+            instance.cfg_path, instance.sandbox_config_path, {"PauseGameWhenEmpty": bool(d["pause_when_empty"])}
+        )
 
 
 # ---------- mods on a server ----------
@@ -379,6 +416,7 @@ class DefaultsIn(BaseModel):
     max_players: int = Field(ge=1, le=1000)
     max_backup_saves: int = Field(ge=0, le=1000)
     backup_interval: int = Field(ge=1, le=1440)
+    pause_when_empty: bool = True
     administrators: list[str] = []
     banned: list[str] = []
     reserved: list[str] = []
