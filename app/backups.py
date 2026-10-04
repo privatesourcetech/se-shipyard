@@ -54,3 +54,14 @@ def restore_backup(instance: Instance, backup_name: str) -> None:
         shutil.copytree(backup_dir, instance.world_path, dirs_exist_ok=True)
     finally:
         docker_control.start(instance.container_name)
+
+
+def create_backup(instance: Instance) -> str:
+    """Copy the live world folder into the backup folder as a new timestamped entry.
+
+    Copies the files as they are on disk. If the server is running, the game may
+    be mid-autosave -- the autosave-made backups are the safer restore points.
+    """
+    name = "shipyard-" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    shutil.copytree(instance.world_path, instance.backup_path / name)
+    return name

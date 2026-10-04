@@ -45,3 +45,32 @@ def restart(container_name: str, timeout: int = 30) -> None:
 def get_logs(container_name: str, tail: int = 200) -> str:
     container = _get_client().containers.get(container_name)
     return container.logs(tail=tail).decode("utf-8", errors="replace")
+
+
+def get_info(container_name: str) -> dict:
+    """Status, health, start time and (when running) CPU/memory for one container."""
+    info = {"status": "not_found", "health": None, "started_at": None, "cpu": 0.0, "mem_gb": 0.0}
+    try:
+        container = _get_client().containers.get(container_name)
+    except NotFound:
+        return info
+    state = container.attrs.get("State", {})
+    info["status"] = container.status
+    info["health"] = (state.get("Health") or {}).get("Status")
+    info["started_at"] = state.get("StartedAt")
+    if container.status == "running":
+        try:
+            stats = container.stats(stream=False)
+            cpu = stats["cpu_stats"]
+            pre = stats["precpu_stats"]
+            cpu_delta = cpu["cpu_usage"]["total_usage"] - pre["cpu_usage"]["total_usage"]
+            sys_delta = cpu.get("system_cpu_usage", 0) - pre.get("system_cpu_usage", 0)
+            ncpu = cpu.get("online_cpus") or len(cpu["cpu_usage"].get("percpu_usage") or [1])
+            if sys_delta > 0 and cpu_delta >= 0:
+                info["cpu"] = round(cpu_delta / sys_delta * ncpu * 100, 1)
+            mem = stats["memory_stats"]
+            used = mem.get("usage", 0) - mem.get("stats", {}).get("inactive_file", 0)
+            info["mem_gb"] = round(max(used, 0) / 1024**3, 1)
+        except Exception:  # noqa: BLE001 - stats are decoration, never fail the page
+            pass
+    return info

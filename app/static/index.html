@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SE Shipyard</title>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#ffffff; --panel2:#eef1f6; --border:#d9dee7; --text:#1b2330; --muted:#6a7588;
+  --accent:#2f6fed; --accent-fg:#fff; --ok:#1f9d55; --warn:#d98a00; --bad:#d6403a; --shadow:0 1px 3px rgba(20,30,50,.12);
+}
+:root[data-theme="dark"]{
+  --bg:#0f1319; --panel:#171d26; --panel2:#1f2733; --border:#2b3545; --text:#e6ebf3; --muted:#8c99ad;
+  --accent:#4c8dff; --accent-fg:#06101f; --ok:#3fcf7f; --warn:#f0b13a; --bad:#ff6b63; --shadow:0 1px 3px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--bad)}
+button:disabled{opacity:.4;cursor:not-allowed}
+input,select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:10px}
+label>input,label>select,label>textarea{margin-top:4px;color:var(--text);font-size:14px}
+
+/* sidebar */
+aside{width:210px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{padding:18px 18px 14px;font-weight:700;font-size:17px;letter-spacing:.3px}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+nav{display:flex;flex-direction:column;gap:2px;padding:6px 10px}
+nav button{text-align:left;background:none;border:0;padding:9px 12px;border-radius:6px;display:flex;gap:10px;align-items:center;color:var(--muted)}
+nav button:hover{background:var(--panel2);color:var(--text)}
+nav button.active{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.spacer{flex:1}
+.side-foot{padding:14px 18px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+
+main{flex:1;padding:26px 32px;max-width:1200px}
+h1{margin:0 0 4px;font-size:22px}
+.sub{color:var(--muted);margin:0 0 22px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 2px;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+.card .meta{color:var(--muted);font-size:12px;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:var(--panel2);border-radius:6px;padding:8px 10px}
+.stat b{display:block;font-size:16px}
+.stat span{font-size:11px;color:var(--muted)}
+.bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid currentColor}
+.pill.running{color:var(--ok)} .pill.exited{color:var(--muted)} .pill.restarting{color:var(--warn)}
+.chip{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:99px;padding:1px 9px;font-size:11px;margin:2px 4px 2px 0}
+.empty{color:var(--muted);padding:30px;text-align:center;border:1px dashed var(--border);border-radius:10px}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:8px 14px;color:var(--muted)}
+.tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+
+/* servers accordion */
+.srv{background:var(--panel);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;box-shadow:var(--shadow)}
+.srv-head{display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer}
+.srv-head:hover{background:var(--panel2);border-radius:10px}
+.srv-head .caret{transition:transform .15s;color:var(--muted)}
+.srv.open .caret{transform:rotate(90deg)}
+.srv-head .name{font-weight:600;font-size:15px;min-width:140px}
+.srv-head .info{color:var(--muted);font-size:12px;flex:1}
+.srv-body{display:none;padding:4px 18px 18px;border-top:1px solid var(--border)}
+.srv.open .srv-body{display:block}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px}
+@media(max-width:900px){.two,.three{grid-template-columns:1fr} aside{width:64px} nav button span.t,.brand small,.side-foot{display:none} main{padding:18px}}
+.changed{outline:2px solid var(--warn);outline-offset:-1px}
+.banner{background:color-mix(in srgb,var(--warn) 18%,transparent);border:1px solid var(--warn);border-radius:8px;padding:8px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.log{background:#0a0d12;color:#c9d4e6;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;padding:12px;height:260px;overflow:auto;white-space:pre-wrap}
+.log .ev-join{color:#6bd0ff}.log .ev-save{color:#8c99ad}.log .ev-warn{color:#f0b13a}.log .ev-err{color:#ff6b63}
+
+/* tables */
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.mod-title{font-weight:600}
+.mod-desc{color:var(--muted);font-size:12px;max-width:520px}
+.thumb{width:44px;height:44px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex-shrink:0}
+.mod-row{display:flex;gap:12px}
+.list-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.modal-bg.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;width:min(560px,92vw);max-height:90vh;overflow:auto}
+.modal h2{margin:0 0 14px}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--panel);border:1px solid var(--accent);border-left-width:4px;padding:10px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;z-index:60}
+.toast.show{opacity:1;transform:none}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.theme-opt{border:2px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;background:var(--panel)}
+.theme-opt.sel{border-color:var(--accent)}
+.swatch{height:60px;border-radius:6px;margin-bottom:8px;display:flex;overflow:hidden;border:1px solid var(--border)}
+.swatch i{flex:1}
+.soon{opacity:.55}
+.section-title{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:22px 0 10px}
+
+.thumb img{width:100%;height:100%;object-fit:cover;border-radius:6px}
+.thumb{overflow:hidden}
+.err{color:var(--bad)}
+.loading{color:var(--muted);padding:20px}
+.pill.not_found,.pill.dead,.pill.created,.pill.paused{color:var(--warn)}
+.chk{display:flex;gap:8px;align-items:center;color:var(--text);font-size:13px}
+.chk input{width:auto;margin:0}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand">SE Shipyard<small>Space Engineers server admin</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <div class="side-foot" id="foot"></div>
+</aside>
+<main id="main"><div class="loading">Loading…</div></main>
+<div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

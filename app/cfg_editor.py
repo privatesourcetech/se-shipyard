@@ -50,10 +50,24 @@ class ServerSettings:
     max_backup_saves: int
     server_name: str
     world_name: str
+    backup_interval: int = 5  # AutoSaveInMinutes
+    server_port: int = 0
     administrators: list[str] = field(default_factory=list)
     banned: list[str] = field(default_factory=list)
     reserved: list[str] = field(default_factory=list)
     has_password: bool = False
+
+
+def _write_tree(tree: ET.ElementTree, path: Path) -> None:
+    """Write via temp file + rename so a crash mid-write can't leave a corrupt config."""
+    tmp = path.with_name(path.name + ".shipyard-tmp")
+    tree.write(tmp, encoding="utf-8", xml_declaration=True)
+    # The game container runs as a different uid than Shipyard (root): keep the
+    # original file's owner and mode so the game can still write it afterwards.
+    st = path.stat()
+    os.chown(tmp, st.st_uid, st.st_gid)
+    os.chmod(tmp, st.st_mode & 0o7777)
+    os.replace(tmp, path)
 
 
 def _text(root: ET.Element, tag: str, default: str = "") -> str:
@@ -76,7 +90,7 @@ def _id_list(root: ET.Element, tag: str) -> list[str]:
 
 # -- Sandbox_config.sbc: live session settings (GameMode, PCU, etc.) --
 
-_LIVE_FIELDS = ("GameMode", "TotalPCU", "PiratePCU", "MaxPlayers", "MaxBackupSaves")
+_LIVE_FIELDS = ("GameMode", "TotalPCU", "PiratePCU", "MaxPlayers", "MaxBackupSaves", "AutoSaveInMinutes")
 
 
 def _read_live_fields(sandbox_config_path: Path) -> dict[str, str]:
@@ -102,7 +116,7 @@ def _write_live_fields(sandbox_config_path: Path, fields: dict[str, str]) -> Non
         if el is not None:
             el.text = value
     ET.indent(tree, space="  ")
-    tree.write(sandbox_config_path, encoding="utf-8", xml_declaration=True)
+    _write_tree(tree, sandbox_config_path)
 
 
 def read_settings(cfg_path: Path, sandbox_config_path: Path) -> ServerSettings:
@@ -125,6 +139,8 @@ def read_settings(cfg_path: Path, sandbox_config_path: Path) -> ServerSettings:
         max_backup_saves=int(live_or_cfg("MaxBackupSaves", "10") or 10),
         server_name=_text(root, "ServerName", ""),
         world_name=_text(root, "WorldName", ""),
+        backup_interval=int(live_or_cfg("AutoSaveInMinutes", "5") or 5),
+        server_port=int(_text(root, "ServerPort", "0") or 0),
         administrators=_id_list(root, "Administrators"),
         banned=_id_list(root, "Banned"),
         reserved=_id_list(root, "Reserved"),
@@ -164,13 +180,14 @@ def write_settings(cfg_path: Path, sandbox_config_path: Path, settings: ServerSe
     _set_session_text(root, "PiratePCU", str(settings.pirate_pcu))
     _set_session_text(root, "MaxPlayers", str(settings.max_players))
     _set_session_text(root, "MaxBackupSaves", str(settings.max_backup_saves))
+    _set_session_text(root, "AutoSaveInMinutes", str(settings.backup_interval))
     _set_text(root, "ServerName", settings.server_name)
     _set_id_list(root, "Administrators", settings.administrators)
     _set_id_list(root, "Banned", settings.banned)
     _set_id_list(root, "Reserved", settings.reserved)
 
     ET.indent(tree, space="  ")
-    tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
+    _write_tree(tree, cfg_path)
 
     if sandbox_config_path.exists():
         _write_live_fields(
@@ -181,6 +198,7 @@ def write_settings(cfg_path: Path, sandbox_config_path: Path, settings: ServerSe
                 "PiratePCU": str(settings.pirate_pcu),
                 "MaxPlayers": str(settings.max_players),
                 "MaxBackupSaves": str(settings.max_backup_saves),
+                "AutoSaveInMinutes": str(settings.backup_interval),
             },
         )
 
@@ -191,7 +209,7 @@ def clear_password(cfg_path: Path) -> None:
     _set_text(root, "ServerPasswordHash", "")
     _set_text(root, "ServerPasswordSalt", "")
     ET.indent(tree, space="  ")
-    tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
+    _write_tree(tree, cfg_path)
 
 
 def set_password(cfg_path: Path, password: str) -> None:
@@ -203,4 +221,4 @@ def set_password(cfg_path: Path, password: str) -> None:
     _set_text(root, "ServerPasswordHash", base64.b64encode(derived).decode("ascii"))
     _set_text(root, "ServerPasswordSalt", base64.b64encode(salt).decode("ascii"))
     ET.indent(tree, space="  ")
-    tree.write(cfg_path, encoding="utf-8", xml_declaration=True)
+    _write_tree(tree, cfg_path)

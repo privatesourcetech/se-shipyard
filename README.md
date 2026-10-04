@@ -4,6 +4,23 @@ A small self-hosted web app for administering multiple Space Engineers dedicated
 server instances (running as `devidian/spaceengineers` Docker containers on
 TrueNAS) from one dashboard.
 
+## Features
+
+- **Home:** card view of every server (status, CPU, memory, mods, restart-needed flag).
+- **Servers:** expandable per-server settings, mods, live log and backups; add a
+  server from the UI.
+- **Default settings:** a template (game mode, PCU, players, backup saves/interval,
+  admins/banned/reserved, password) you can apply to any server.
+- **Mods:** your mod list with Workshop names/descriptions, which servers use each,
+  and Workshop search by name (needs a free Steam Web API key, set in
+  *UI settings*, or via the `STEAM_API_KEY` env var).
+- **UI settings:** light/dark/system theme.
+
+Data kept on the data volume: `instances.yaml`, `defaults.yaml`, `library.yaml`,
+`pending.yaml`, `mod_cache.json`, and `steam_key` (mode 0600, never sent back to
+the browser). The default password, if set, is stored in `defaults.yaml` in
+plaintext (it is never returned by the API).
+
 ## Why this exists
 
 Keen's own "Space Engineers Dedicated Server" GUI tool cannot run reliably
@@ -43,7 +60,7 @@ known gaps under Wine. So SE Shipyard works entirely by:
 
 - **No live player list, kick, or chat.** There's no working live channel to
   a running instance (see above). The "Recent activity" section on each
-  instance page is a best-effort approximation parsed from container logs —
+  server's Log tab is a best-effort approximation parsed from container logs —
   it recognizes join-attempt and world-load lines, but has not yet observed
   (and so cannot recognize) a disconnect or chat-message log line. Everything
   unrecognized shows as a raw log line rather than being hidden.
@@ -56,8 +73,9 @@ known gaps under Wine. So SE Shipyard works entirely by:
   (byte lengths, encoding) but actually joining with a password set this way
   hasn't been tested yet -- do that once deployed, before relying on it.
 - Settings and mod changes require a container restart to take effect — the
-  UI says so but does not restart automatically, so you can batch several
-  changes before restarting.
+  UI shows a "restart needed" banner but does not restart automatically, so you
+  can batch several changes first. Editing a *running* server's files can be
+  overwritten by the game's own autosave; stop the server first for safety.
 
 ## Security warning
 
