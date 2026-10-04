@@ -49,7 +49,7 @@ def get_logs(container_name: str, tail: int = 200) -> str:
 
 def get_info(container_name: str) -> dict:
     """Status, health, start time and (when running) CPU/memory for one container."""
-    info = {"status": "not_found", "health": None, "started_at": None, "cpu": 0.0, "mem_gb": 0.0}
+    info = {"status": "not_found", "health": None, "started_at": None, "cores": 0.0, "host_cores": 0, "mem_gb": 0.0}
     try:
         container = _get_client().containers.get(container_name)
     except NotFound:
@@ -66,8 +66,10 @@ def get_info(container_name: str) -> dict:
             cpu_delta = cpu["cpu_usage"]["total_usage"] - pre["cpu_usage"]["total_usage"]
             sys_delta = cpu.get("system_cpu_usage", 0) - pre.get("system_cpu_usage", 0)
             ncpu = cpu.get("online_cpus") or len(cpu["cpu_usage"].get("percpu_usage") or [1])
+            info["host_cores"] = ncpu
             if sys_delta > 0 and cpu_delta >= 0:
-                info["cpu"] = round(cpu_delta / sys_delta * ncpu * 100, 1)
+                # 1.0 = one full CPU core busy (Docker's "100%").
+                info["cores"] = round(cpu_delta / sys_delta * ncpu, 1)
             mem = stats["memory_stats"]
             used = mem.get("usage", 0) - mem.get("stats", {}).get("inactive_file", 0)
             info["mem_gb"] = round(max(used, 0) / 1024**3, 1)

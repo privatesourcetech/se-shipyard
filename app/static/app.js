@@ -132,7 +132,7 @@ function homeCard(s) {
     <div class="stats">
       <div class="stat"><b>${st ? st.max_players : "—"}</b><span>max players</span></div>
       <div class="stat"><b>${s.mods.length}</b><span>mods</span></div>
-      <div class="stat"><b>${s.cpu}%</b><span>CPU<div class="bar"><i style="width:${Math.min(100, s.cpu)}%"></i></div></span></div>
+      <div class="stat"><b>${s.cores} ${s.cores === 1 ? "core" : "cores"}</b><span title="CPU cores in use, of ${s.host_cores} on the host">CPU<div class="bar"><i style="width:${s.host_cores ? Math.min(100, s.cores / s.host_cores * 100) : 0}%"></i></div></span></div>
       <div class="stat"><b>${s.mem_gb} GB</b><span>memory<div class="bar"><i style="width:${Math.min(100, s.mem_gb / 12 * 100)}%"></i></div></span></div>
     </div>
     ${s.pending_restart ? `<div class="banner" style="padding:6px 10px"><span>Restart needed</span></div>` : ""}
