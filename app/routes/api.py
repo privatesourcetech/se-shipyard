@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Literal
 
 from docker.errors import DockerException
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app import activity_log, backups, cfg_editor, docker_control, mods_editor, steam, store
+from app import activity_log, backgrounds, backups, cfg_editor, docker_control, mods_editor, steam, store
 from app import instances as registry
 from app.instances import Instance
 
@@ -481,6 +482,51 @@ def test_steam_key():
     except steam.SteamError as exc:
         raise HTTPException(502, str(exc)) from exc
     return {"ok": True}
+
+
+# ---------- background slideshow ----------
+
+
+@router.get("/backgrounds")
+def list_backgrounds():
+    return [{"name": n, "url": f"/api/backgrounds/file/{n}"} for n in backgrounds.list_images()]
+
+
+@router.get("/backgrounds/file/{name}")
+def background_file(name: str):
+    path = backgrounds.path_for(name)
+    if path is None:
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.post("/backgrounds", status_code=201)
+async def upload_background(request: Request):
+    """Raw image bytes in the request body (no multipart dependency)."""
+    declared = int(request.headers.get("content-length") or 0)
+    if declared > backgrounds.MAX_BYTES:
+        raise HTTPException(413, "Image is larger than 15 MB.")
+    data = await request.body()
+    try:
+        name = backgrounds.save_upload(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"name": name, "url": f"/api/backgrounds/file/{name}"}
+
+
+@router.delete("/backgrounds/{name}")
+def delete_background(name: str):
+    if not backgrounds.delete(name):
+        raise HTTPException(404, "Image not found")
+    return {"ok": True}
+
+
+@router.post("/backgrounds/fetch-steam")
+def fetch_steam_backgrounds():
+    try:
+        return backgrounds.fetch_steam_screenshots()
+    except steam.SteamError as exc:
+        raise HTTPException(502, str(exc)) from exc
 
 
 # Registered last: its generic {action} path must not shadow /servers/{name}/mods etc.

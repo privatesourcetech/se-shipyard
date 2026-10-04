@@ -115,9 +115,25 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
 .pill.not_found,.pill.dead,.pill.created,.pill.paused{color:var(--warn)}
 .chk{display:flex;gap:8px;align-items:center;color:var(--text);font-size:13px}
 .chk input{width:auto;margin:0}
+
+/* background slideshow */
+#bg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#bg .layer{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 2.5s ease-in-out}
+#bg .layer.show{opacity:var(--bg-opacity,.12)}
+#bg .layer.zoom{animation:bgzoom 40s ease-in-out infinite alternate}
+@keyframes bgzoom{from{transform:scale(1)}to{transform:scale(1.08)}}
+@media (prefers-reduced-motion: reduce){#bg .layer{transition:none}#bg .layer.zoom{animation:none}}
+body.has-bg aside{background:color-mix(in srgb,var(--panel) 82%,transparent);backdrop-filter:blur(6px)}
+body.has-bg .card,body.has-bg .srv,body.has-bg .modal{background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(6px)}
+.bg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:12px 0}
+.bg-grid .bgi{position:relative;aspect-ratio:16/9;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.bg-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.bg-grid button{position:absolute;top:3px;right:3px;padding:0 6px;line-height:20px;font-size:12px;background:rgba(0,0,0,.65);color:#fff;border:0}
+input[type=range]{padding:0}
 </style>
 </head>
 <body>
+<div id="bg" aria-hidden="true"></div>
 <aside>
   <div class="brand">SE Shipyard<small>Space Engineers server admin</small></div>
   <nav id="nav"></nav>

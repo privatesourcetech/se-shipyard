@@ -14,7 +14,10 @@ TrueNAS) from one dashboard.
 - **Mods:** your mod list with Workshop names/descriptions, which servers use each,
   and Workshop search by name (needs a free Steam Web API key, set in
   *UI settings*, or via the `STEAM_API_KEY` env var).
-- **UI settings:** light/dark/system theme.
+- **UI settings:** light/dark/system theme, and an optional faint background
+  slideshow (opacity and interval adjustable). Images come from your own uploads
+  and/or the official Space Engineers Steam store screenshots, fetched on demand
+  to the data volume (`backgrounds/`) -- no images are bundled in this repo.
 
 Data kept on the data volume: `instances.yaml`, `defaults.yaml`, `library.yaml`,
 `pending.yaml`, `mod_cache.json`, and `steam_key` (mode 0600, never sent back to

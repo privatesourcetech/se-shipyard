@@ -44,6 +44,13 @@ def atomic_write(path: Path, text: str, mode: int | None = None) -> None:
     os.replace(tmp, path)
 
 
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
 def _load(name: str, default):
     path = DATA_DIR / name
     if not path.exists():

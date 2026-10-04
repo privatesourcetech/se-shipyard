@@ -9,7 +9,8 @@ const state = {
   defaults: null,
   mods: null,         // library + used mods
   steam: { set: false, source: null },
-  ui: loadLocal("ui", { theme: "dark" }),
+  ui: loadLocal("ui", { theme: "dark", bgOn: false, bgOpacity: 12, bgSeconds: 30 }),
+  bgImages: [],
   open: {}, tab: {},
   searchQ: "", searchRes: null, searching: false, searchErr: null,
   replacingKey: false,
@@ -91,7 +92,7 @@ async function enter(view) {
     if (view === "servers") for (const n of Object.keys(state.open)) if (state.open[n] && !state.detail[n]) await loadDetail(n).catch(() => {});
     if (view === "defaults" || view === "servers") await loadDefaults();
     if (view === "mods") { await Promise.all([loadMods(), loadSteam()]); }
-    if (view === "ui") await loadSteam();
+    if (view === "ui") await Promise.all([loadSteam(), loadBackgrounds()]);
     state.loadError = null;
   } catch (e) { state.loadError = e.message; }
   render();
@@ -264,6 +265,8 @@ function viewUI() {
     ${opt("dark", "Dark", ["#0f1319", "#171d26", "#4c8dff", "#e6ebf3"])}
     ${opt("system", "Match system", ["#f4f6f9", "#0f1319", "#2f6fed", "#4c8dff"])}
   </div>
+  <div class="section-title">Background slideshow</div>
+  <div class="card" style="max-width:620px">${bgCard()}</div>
   <div class="section-title">Steam Workshop search</div>
   <div class="card" style="max-width:620px">${steamCard()}</div>
   <div class="section-title">Coming later</div>
@@ -273,6 +276,78 @@ function viewUI() {
     <label>Accent color<select disabled><option>Blue</option></select></label>
   </div>`;
 }
+/* -- background slideshow -- */
+function bgCard() {
+  const u = state.ui, imgs = state.bgImages;
+  return `<label class="chk"><input type="checkbox" ${u.bgOn ? "checked" : ""} onchange="setBg('bgOn',this.checked)"> Show background slideshow</label>
+    <div class="two" style="margin-top:12px">
+      <label>Opacity: ${u.bgOpacity}%<input type="range" min="3" max="40" value="${u.bgOpacity}" oninput="setBg('bgOpacity',Number(this.value),true)" onchange="setBg('bgOpacity',Number(this.value))"></label>
+      <label>Change image every<select onchange="setBg('bgSeconds',Number(this.value))">${[10, 20, 30, 60, 120].map((n) => `<option value="${n}" ${u.bgSeconds === n ? "selected" : ""}>${n} seconds</option>`).join("")}</select></label>
+    </div>
+    <div class="row">
+      <button onclick="fetchSteamBackgrounds()">Fetch Steam screenshots</button>
+      <button onclick="document.getElementById('bg-upload').click()">Upload images…</button>
+      <input id="bg-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onchange="uploadBackgrounds(this.files)">
+    </div>
+    <p class="meta" style="color:var(--muted)">Steam screenshots are the official Space Engineers store-page images, downloaded once and kept on your server for use here only. JPEG, PNG or WebP, up to 15 MB each.</p>
+    ${imgs.length ? `<div class="bg-grid">${imgs.map((i) => `<div class="bgi"><img src="${esc(i.url)}" alt="" loading="lazy"><button title="Delete" onclick="deleteBackground(${q(i.name)})">✕</button></div>`).join("")}</div>` : `<div class="empty">No images yet. Fetch the Steam screenshots or upload your own.</div>`}`;
+}
+function setBg(key, val, live) {
+  state.ui[key] = val; saveLocal("ui", state.ui);
+  if (key === "bgOpacity") document.documentElement.style.setProperty("--bg-opacity", val / 100);
+  if (live) return;           // slider drag: don't rebuild the card mid-drag
+  applyBackground(); render();
+}
+async function loadBackgrounds() { state.bgImages = await api("/backgrounds"); }
+async function fetchSteamBackgrounds() {
+  toast("Downloading screenshots from Steam…");
+  const r = await attempt(() => api("/backgrounds/fetch-steam", "POST"));
+  if (!r) return;
+  toast(r.added ? `Added ${r.added} screenshots` : "Already up to date");
+  await loadBackgrounds(); applyBackground(); render();
+}
+async function uploadBackgrounds(files) {
+  let ok = 0;
+  for (const f of files) {
+    try {
+      const res = await fetch("/api/backgrounds", { method: "POST", body: f });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || `Upload failed (${res.status})`); }
+      ok++;
+    } catch (e) { toast(`${f.name}: ${e.message}`, true); }
+  }
+  if (ok) { toast(`Uploaded ${ok} image${ok === 1 ? "" : "s"}`); await loadBackgrounds(); applyBackground(); render(); }
+}
+async function deleteBackground(name) {
+  if (await attempt(() => api("/backgrounds/" + encodeURIComponent(name), "DELETE")) === undefined) return;
+  await loadBackgrounds(); applyBackground(); render();
+}
+
+let bgTimer = null, bgIndex = -1, bgFront = 0;
+function applyBackground() {
+  clearInterval(bgTimer); bgTimer = null;
+  const root = $("#bg"), on = state.ui.bgOn && state.bgImages.length > 0;
+  document.body.classList.toggle("has-bg", on);
+  document.documentElement.style.setProperty("--bg-opacity", state.ui.bgOpacity / 100);
+  if (!on) { root.innerHTML = ""; bgIndex = -1; return; }
+  if (root.children.length !== 2) root.innerHTML = '<div class="layer zoom"></div><div class="layer zoom"></div>';
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const next = () => {
+    bgIndex = (bgIndex + 1) % state.bgImages.length;
+    const layers = root.children, incoming = layers[bgFront], outgoing = layers[1 - bgFront];
+    const url = state.bgImages[bgIndex].url;
+    const img = new Image();
+    img.onload = () => {
+      incoming.style.backgroundImage = `url("${url}")`;
+      incoming.classList.add("show"); outgoing.classList.remove("show");
+      bgFront = 1 - bgFront;
+    };
+    img.src = url;
+  };
+  bgIndex = Math.floor(Math.random() * state.bgImages.length) - 1;
+  next();
+  if (!reduce && state.bgImages.length > 1) bgTimer = setInterval(next, state.ui.bgSeconds * 1000);
+}
+
 function setTheme(t) { state.ui.theme = t; saveLocal("ui", state.ui); applyTheme(); render(); }
 function steamCard() {
   const st = state.steam;
@@ -541,3 +616,4 @@ $("#modal-bg").addEventListener("click", (e) => { if (e.target.id === "modal-bg"
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 applyTheme();
 enter("home");
+loadBackgrounds().then(applyBackground).catch(() => {});
