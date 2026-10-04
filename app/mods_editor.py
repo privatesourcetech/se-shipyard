@@ -14,6 +14,17 @@ functions only ever touch the isolated <Mods>...</Mods> span: read it with
 ElementTree for listing (safe, nothing is written back), but write changes as
 targeted text edits of just that span, leaving everything else byte-for-byte
 untouched.
+
+A world with zero mods serializes as a self-closing empty tag, `<Mods />`
+(space before the slash) -- not `<Mods></Mods>`, and not omitted entirely.
+Confirmed against a real save (ExampleB), the hard way: an earlier version
+of this module checked for the literal substring "<Mods>" and didn't match
+"<Mods />" at all, so add_mod() inserted a second, separate empty block
+after <SessionName> instead of recognizing and expanding the existing one --
+left two <Mods> elements in the file. Fixed by detecting and replacing the
+self-closing form specifically; <SessionName> is only used as a fallback
+anchor for the (so far never actually observed) case where no Mods element
+exists at all.
 """
 
 from __future__ import annotations
@@ -26,6 +37,7 @@ from xml.sax.saxutils import quoteattr
 
 _OPEN = "<Mods>"
 _CLOSE = "</Mods>"
+_SELF_CLOSING_RE = re.compile(r"<Mods\s*/>")
 
 
 @dataclass
@@ -38,14 +50,40 @@ class ModNotFoundError(Exception):
     pass
 
 
+class ModsBlockMissingError(Exception):
+    pass
+
+
 def _mods_block_span(text: str) -> tuple[int, int]:
     start = text.index(_OPEN)
     end = text.index(_CLOSE, start) + len(_CLOSE)
     return start, end
 
 
+_SESSION_NAME_CLOSE = "</SessionName>"
+
+
+def _ensure_mods_block(text: str) -> str:
+    """Make sure a <Mods>...</Mods> pair (not self-closing) exists to insert into."""
+    if _OPEN in text:
+        return text
+    if _SELF_CLOSING_RE.search(text):
+        return _SELF_CLOSING_RE.sub("<Mods>\n  </Mods>", text, count=1)
+    # Never actually observed -- every real save checked so far has at least
+    # the self-closing form -- but handle it rather than assume it can't happen.
+    idx = text.find(_SESSION_NAME_CLOSE)
+    if idx == -1:
+        raise ModsBlockMissingError(
+            "No <Mods> element (open/close or self-closing) and no <SessionName> anchor to insert one after"
+        )
+    insert_at = idx + len(_SESSION_NAME_CLOSE)
+    return text[:insert_at] + "\n  <Mods>\n  </Mods>" + text[insert_at:]
+
+
 def list_mods(sandbox_path: Path) -> list[ModItem]:
     text = sandbox_path.read_text(encoding="utf-8")
+    if _OPEN not in text:
+        return []  # absent entirely, or self-closing <Mods /> -- either way, no mods
     start, end = _mods_block_span(text)
     root = ET.fromstring(text[start:end])
     mods = []
@@ -61,7 +99,7 @@ def list_mods(sandbox_path: Path) -> list[ModItem]:
 
 
 def add_mod(sandbox_path: Path, published_file_id: str, friendly_name: str = "") -> None:
-    text = sandbox_path.read_text(encoding="utf-8")
+    text = _ensure_mods_block(sandbox_path.read_text(encoding="utf-8"))
     start, end = _mods_block_span(text)
     block = text[start:end]
 
@@ -89,6 +127,8 @@ _MOD_ITEM_RE_TEMPLATE = (
 
 def remove_mod(sandbox_path: Path, published_file_id: str) -> None:
     text = sandbox_path.read_text(encoding="utf-8")
+    if _OPEN not in text:
+        raise ModNotFoundError(f"No mods present in {sandbox_path}")
     start, end = _mods_block_span(text)
     block = text[start:end]
 
