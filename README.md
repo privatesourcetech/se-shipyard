@@ -14,6 +14,11 @@ TrueNAS) from one dashboard.
 - **Mods:** your mod list with Workshop names/descriptions, which servers use each,
   and Workshop search by name (needs a free Steam Web API key, set in
   *UI settings*, or via the `STEAM_API_KEY` env var).
+- **World analyzer:** scans a saved world's files (the server can be offline) and
+  shows grid/block statistics, physics-heavy block counts, moving vs static
+  grids, a sortable per-grid table, the mod list with "may be heavy" flags, host
+  resources, and rule-of-thumb tuning tips. The scan runs in a separate
+  low-priority process. Tips are heuristics, not measurements.
 - **UI settings:** light/dark/system theme, and an optional faint background
   slideshow (opacity and interval adjustable). Images come from your own uploads
   and/or the official Space Engineers Steam store screenshots, fetched on demand

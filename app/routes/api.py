@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app import activity_log, advanced, backgrounds, backups, cfg_editor, docker_control, mods_editor, steam, store
+from app import activity_log, advanced, analysis_service, backgrounds, backups, cfg_editor, docker_control, mods_editor, steam, store
 from app import instances as registry
 from app.instances import Instance
 
@@ -521,6 +521,26 @@ def test_steam_key():
     except steam.SteamError as exc:
         raise HTTPException(502, str(exc)) from exc
     return {"ok": True}
+
+
+# ---------- world analyzer ----------
+
+
+@router.get("/servers/{name}/analysis")
+def get_analysis(name: str):
+    return analysis_service.status(_instance_or_404(name))
+
+
+@router.post("/servers/{name}/analysis", status_code=202)
+def start_analysis(name: str):
+    instance = _instance_or_404(name)
+    try:
+        analysis_service.start(instance)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return analysis_service.status(instance)
 
 
 # ---------- background slideshow ----------

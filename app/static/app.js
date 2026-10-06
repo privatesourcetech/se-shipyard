@@ -12,6 +12,7 @@ const state = {
   ui: loadLocal("ui", { theme: "dark", bgOn: false, bgOpacity: 12, bgSeconds: 30 }),
   bgImages: [],
   advSchema: null, advOpen: {},
+  an: { name: null, data: null, sort: { key: "blocks", dir: -1 }, all: false },
   open: {}, tab: {},
   searchQ: "", searchRes: null, searching: false, searchErr: null,
   replacingKey: false,
@@ -87,7 +88,8 @@ async function loadSteam() { state.steam = await api("/steam-key"); }
 
 async function enter(view) {
   state.view = view;
-  stopLog();
+  try { history.replaceState(null, "", "#" + view); } catch (e) { /* ignore */ }
+  stopLog(); stopAnalysisPoll();
   render();
   try {
     if (view === "home" || view === "servers") await loadServers();
@@ -95,6 +97,11 @@ async function enter(view) {
     if (view === "defaults" || view === "servers") await loadDefaults();
     if (view === "mods") { await Promise.all([loadMods(), loadSteam()]); }
     if (view === "ui") await Promise.all([loadSteam(), loadBackgrounds()]);
+    if (view === "analyzer") {
+      if (!state.servers) await loadServers();
+      if (!state.an.name && state.servers.length) state.an.name = state.servers[0].name;
+      await loadAnalysis();
+    }
     state.loadError = null;
   } catch (e) { state.loadError = e.message; }
   render();
@@ -103,7 +110,7 @@ async function enter(view) {
 function go(v) { enter(v); }
 
 /* ---------- navigation ---------- */
-const NAV = [["home", "⌂", "Home"], ["mods", "▦", "Mods"], ["defaults", "⚙", "Default settings"], ["ui", "◐", "UI settings"], ["servers", "☰", "Servers"]];
+const NAV = [["home", "⌂", "Home"], ["mods", "▦", "Mods"], ["defaults", "⚙", "Default settings"], ["ui", "◐", "UI settings"], ["servers", "☰", "Servers"], ["analyzer", "◈", "World analyzer"]];
 function renderNav() {
   $("#nav").innerHTML = NAV.map(([id, ic, l]) => `<button class="${state.view === id ? "active" : ""}" onclick="go('${id}')">${ic}<span class="t">${l}</span></button>`).join("");
 }
@@ -590,6 +597,110 @@ async function restoreBackup(n, b) {
   if (r) await refreshAll(n);
 }
 
+/* ---------- world analyzer ---------- */
+let anTimer = null;
+function stopAnalysisPoll() { clearInterval(anTimer); anTimer = null; }
+async function loadAnalysis() {
+  stopAnalysisPoll();
+  if (!state.an.name) { state.an.data = null; return; }
+  const name = state.an.name;
+  state.an.data = await api(`/servers/${encodeURIComponent(name)}/analysis`);
+  if (state.an.data.state === "running") {
+    anTimer = setInterval(async () => {
+      if (state.view !== "analyzer" || state.an.name !== name) { stopAnalysisPoll(); return; }
+      try { state.an.data = await api(`/servers/${encodeURIComponent(name)}/analysis`); } catch (e) { stopAnalysisPoll(); return; }
+      if (state.an.data.state !== "running") stopAnalysisPoll();
+      render();
+    }, 1500);
+  }
+}
+async function pickAnalysisServer(name) { state.an.name = name; state.an.all = false; state.an.data = null; render(); await attempt(loadAnalysis); render(); }
+async function runAnalysis() {
+  const r = await attempt(() => api(`/servers/${encodeURIComponent(state.an.name)}/analysis`, "POST"));
+  if (r) { await loadAnalysis(); render(); }
+}
+function anSort(key) {
+  const s = state.an.sort;
+  state.an.sort = { key, dir: s.key === key ? -s.dir : (key === "name" ? 1 : -1) };
+  render();
+}
+const nfmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
+function ago(ts) {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 129600) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " days ago";
+}
+function viewAnalyzer() {
+  const early = loadingOrError(state.servers); if (early) return `<h1>World analyzer</h1>${early}`;
+  if (!state.servers.length) return `<h1>World analyzer</h1><div class="empty">Add a server first.</div>`;
+  const an = state.an, d = an.data;
+  const picker = `<div class="card" style="margin-bottom:18px"><div class="row" style="justify-content:space-between">
+    <div class="row"><label style="margin:0">Server<select onchange="pickAnalysisServer(this.value)" style="min-width:200px">${state.servers.map((s) => `<option ${s.name === an.name ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select></label>
+    ${d ? `<span class="meta" style="color:var(--muted)">${d.world_file_exists ? `World file ${d.world_file_mb} MB` : "No world file found"}${d.state === "done" ? ` · analyzed ${ago(d.result.analyzed_at)}${d.result.stale ? ` · <b style="color:var(--warn)">world changed since — re-analyze</b>` : ""}` : ""}</span>` : ""}</div>
+    <button class="primary" ${!d || d.state === "running" || !d.world_file_exists ? "disabled" : ""} onclick="runAnalysis()">${d && d.state === "done" ? "Re-analyze" : "Analyze world"}</button></div>
+    <p class="meta" style="color:var(--muted);margin:10px 0 0">Reads the saved world files, so the server can be offline. It shows the last saved state${srv(an.name) && srv(an.name).status === "running" ? " (the server is running now, so recent changes may not be saved yet)" : ""}. The scan runs at low priority.</p></div>`;
+  const head = `<div class="page-head"><div><h1>World analyzer</h1><p class="sub">What's inside a world, and what might be making it slow.</p></div></div>${picker}`;
+  if (!d) return head + `<div class="loading">Loading…</div>`;
+  if (d.state === "none") return head + `<div class="empty">${d.world_file_exists ? "No analysis yet. Press “Analyze world”." : "This server's world file (SANDBOX_0_0_0_.sbs) wasn't found."}</div>`;
+  if (d.state === "running") return head + `<div class="card"><b>Analyzing…</b> ${Math.round(d.progress * 100)}%<div class="progress"><i style="width:${d.progress * 100}%"></i></div></div>`;
+  if (d.state === "error") return head + `<div class="card err">Analysis failed: ${esc(d.error)}</div>`;
+  return head + analyzerDashboard(d.result);
+}
+function analyzerDashboard(r) {
+  const t = r.totals;
+  const tile = (v, l) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`;
+  const tiles = [
+    tile(nfmt(t.grids), "grids"), tile(nfmt(t.blocks), "blocks"),
+    tile(`${nfmt(t.large_grids)} / ${nfmt(t.small_grids)}`, "large / small grids"),
+    tile(`${nfmt(t.dynamic_grids)} / ${nfmt(t.static_grids)}`, "moving / static grids"),
+    tile(nfmt(t.planets), "planets"), tile(nfmt(t.voxel_maps), "voxel maps"),
+    tile(nfmt(t.characters), "characters"), tile(nfmt(t.floating_objects), "floating objects"),
+    tile(nfmt(r.mods.length), "mods"), tile(`${t.blocks ? Math.round(t.top5_blocks / t.blocks * 100) : 0}%`, "blocks in top 5 grids"),
+  ].join("");
+  const hints = r.hints.length ? r.hints.map((h) => `<div class="hint-row ${h.level}"><small>${h.level === "high" ? "Likely heavy" : h.level === "medium" ? "Worth a look" : "Tip"}</small>${esc(h.text)}</div>`).join("")
+    : `<div class="meta" style="color:var(--muted)">Nothing stands out.</div>`;
+  const heavyCats = r.categories.filter((c) => !["Armor & structure", "Other"].includes(c.name)).slice(0, 14);
+  const armor = (r.categories.find((c) => c.name === "Armor & structure") || { count: 0 }).count;
+  const max = Math.max(1, ...heavyCats.map((c) => c.count));
+  const bars = heavyCats.map((c) => `<div class="hbar"><span>${esc(c.name)}</span><div class="track"><div class="fill" style="width:${c.count / max * 100}%"></div></div><span class="num">${nfmt(c.count)}</span></div>`).join("");
+  const dynPct = t.blocks ? t.dynamic_blocks / t.blocks * 100 : 0;
+  // grid table
+  const { key, dir } = state.an.sort;
+  const rows = [...r.grids].sort((a, b) => (typeof a[key] === "string" ? a[key].localeCompare(b[key]) : (a[key] - b[key])) * dir);
+  const shown = state.an.all ? rows : rows.slice(0, 20);
+  const cols = [["name", "Grid"], ["blocks", "Blocks"], ["thrusters", "Thrust"], ["gyros", "Gyro"], ["wheels", "Wheel"], ["rotors", "Rotor"], ["pistons", "Piston"], ["turrets", "Turret"], ["timers", "Timer"], ["pbs", "PB"], ["batteries", "Batt"], ["dist_km", "km"]];
+  const th = cols.map(([k, l]) => `<th class="${k === key ? "sorted" : ""}" onclick="anSort('${k}')">${l}${k === key ? (dir < 0 ? " ▼" : " ▲") : ""}</th>`).join("");
+  const tr = shown.map((g) => `<tr><td>${g.blocks >= 10000 && !g.static ? "⚠ " : ""}${esc(g.name)} <span class="chip">${g.size === "Large" ? "L" : "S"}</span>${g.static ? ` <span class="chip">static</span>` : ""}</td>
+    ${cols.slice(1).map(([k]) => `<td class="n">${k === "dist_km" ? (g[k] == null ? "—" : nfmt(g[k])) : nfmt(g[k])}</td>`).join("")}</tr>`).join("");
+  const s = r.settings || {};
+  return `<div class="tiles">${tiles}</div>
+  <div class="card" style="margin-bottom:18px"><h3 style="margin-top:0">Needs attention</h3>${hints}</div>
+  <div class="two" style="gap:18px;align-items:start;margin-bottom:18px">
+    <div class="card"><h3 style="margin-top:0">Physics &amp; feature blocks</h3>${bars}
+      <div class="meta" style="color:var(--muted);margin-top:8px">Plus ${nfmt(armor)} armor/structure blocks (${t.blocks ? Math.round(armor / t.blocks * 100) : 0}% of all blocks).</div></div>
+    <div class="card"><h3 style="margin-top:0">Moving vs static</h3>
+      <div class="split"><i style="width:${dynPct}%;background:var(--accent)"></i><i style="width:${100 - dynPct}%;background:var(--ok)"></i></div>
+      <div class="legend"><span><em style="background:var(--accent)"></em>Moving: ${nfmt(t.dynamic_blocks)} blocks in ${nfmt(t.dynamic_grids)} grids</span><span><em style="background:var(--ok)"></em>Static: ${nfmt(t.static_blocks)} blocks in ${nfmt(t.static_grids)} grids</span></div>
+      <p class="meta" style="color:var(--muted)">Static grids (stations) are much cheaper to simulate than moving ones. ${nfmt(t.tiny_grids)} grids have under 20 blocks.</p>
+      <h3>Mods</h3>
+      ${r.mods.length ? r.mods.map((m) => `<div class="list-row" style="padding:6px 0"><span style="flex:1"><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(m.name)}</a></span>${m.heavy_note ? `<span class="chip" title="${esc(m.heavy_note)}" style="border-color:var(--warn);color:var(--warn)">may be heavy</span>` : ""}</div>`).join("") : `<div class="meta" style="color:var(--muted)">No mods.</div>`}
+      <h3>Settings &amp; host</h3>
+      <dl class="kv">
+        ${Object.entries(s).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}
+        <dt>Host RAM</dt><dd>${r.host.mem_available_gb ?? "—"} GB free of ${r.host.mem_total_gb ?? "—"} GB</dd>
+        <dt>Host load</dt><dd>${r.host.load1 ?? "—"} on ${r.host.cpus ?? "—"} threads</dd>
+        <dt>CPU governor</dt><dd>${esc(r.host.governor ?? "unknown")}</dd>
+      </dl></div>
+  </div>
+  <div class="card" style="padding:0;overflow-x:auto"><div style="padding:14px 16px 4px"><h3 style="margin:0">Grids</h3>
+    <p class="meta" style="color:var(--muted);margin:2px 0 8px">${nfmt(r.grids_total)} grids${r.grids_total > r.grids.length ? ` (largest ${r.grids.length} kept)` : ""}. Click a column to sort. ⚠ marks moving grids over 10,000 blocks.</p></div>
+    <table class="grids"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
+    ${rows.length > 20 ? `<div style="padding:10px 16px"><button onclick="state.an.all=!state.an.all;render()">${state.an.all ? "Show top 20" : `Show all ${rows.length}`}</button></div>` : ""}</div>
+  <p class="meta" style="color:var(--muted)">Scanned in ${r.duration_s}s. Tips are rule-of-thumb heuristics, not measurements — actual simulation speed can only be measured while the server runs.</p>`;
+}
+
 /* ---------- add server modal ---------- */
 function openAdd() {
   $("#modal").innerHTML = `<h2>Add server</h2>
@@ -665,7 +776,7 @@ setInterval(pollStatus, 5000);
 function render() {
   renderNav();
   const scroll = window.scrollY;
-  $("#main").innerHTML = { home: viewHome, mods: viewMods, defaults: viewDefaults, ui: viewUI, servers: viewServers }[state.view]();
+  $("#main").innerHTML = { home: viewHome, mods: viewMods, defaults: viewDefaults, ui: viewUI, servers: viewServers, analyzer: viewAnalyzer }[state.view]();
   window.scrollTo(0, scroll);
   $("#foot").textContent = state.servers ? `${state.servers.length} server${state.servers.length === 1 ? "" : "s"} registered` : "";
 }
@@ -673,5 +784,5 @@ function render() {
 $("#modal-bg").addEventListener("click", (e) => { if (e.target.id === "modal-bg") closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 applyTheme();
-enter("home");
+{ const v = location.hash.slice(1); enter(NAV.some((n) => n[0] === v) ? v : "home"); }
 loadBackgrounds().then(applyBackground).catch(() => {});

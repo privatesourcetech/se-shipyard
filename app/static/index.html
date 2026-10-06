@@ -116,6 +116,28 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
 .chk{display:flex;gap:8px;align-items:center;color:var(--text);font-size:13px}
 .chk input{width:auto;margin:0}
 
+/* world analyzer */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+.tile b{display:block;font-size:22px;line-height:1.2}
+.tile span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.hint-row{border-left:4px solid var(--border);background:var(--panel2);border-radius:6px;padding:8px 12px;margin-bottom:8px}
+.hint-row.high{border-left-color:var(--bad)}.hint-row.medium{border-left-color:var(--warn)}.hint-row.info{border-left-color:var(--accent)}
+.hint-row small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.hbar{display:grid;grid-template-columns:150px 1fr 70px;gap:10px;align-items:center;margin:5px 0;font-size:13px}
+.hbar .track{height:12px;background:var(--panel2);border-radius:6px;overflow:hidden}
+.hbar .fill{height:100%;background:var(--accent);border-radius:6px}
+.hbar .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.split{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--panel2);margin:8px 0 4px}
+.split i{display:block;height:100%}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+.legend em{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;font-style:normal}
+table.grids th{cursor:pointer;white-space:nowrap}
+table.grids th.sorted{color:var(--text)}
+table.grids td.n{text-align:right;font-variant-numeric:tabular-nums}
+.progress{height:10px;background:var(--panel2);border-radius:5px;overflow:hidden;margin:10px 0}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0}
 /* advanced settings */
 details.adv{margin-top:18px;border:1px solid var(--border);border-radius:8px;padding:10px 14px;background:var(--panel2)}
 details.adv>summary{cursor:pointer;font-weight:600}
