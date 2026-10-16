@@ -135,6 +135,9 @@ SCHEMA: list[Field] = [
     _b("AdaptiveSimulationQuality", S, G_PERF, "Adaptive simulation quality"),
     _b("SimplifiedSimulation", S, G_PERF, "Simplified simulation"),
     _b("EnableSelectivePhysicsUpdates", S, G_PERF, "Selective physics updates"),
+    _b("EnableShareInertiaTensor", S, G_PERF, "Share inertia tensor",
+       "Grids joined by hinges/rotors share one inertia tensor. Can reduce joint wobble and jitter; "
+       "changes how existing mechanical builds behave."),
     # -- Cleanup --
     _b("TrashRemovalEnabled", S, G_TRASH, "Trash removal"),
     _i("BlockCountThreshold", S, G_TRASH, "Trash: block count threshold", 0, 100_000),
