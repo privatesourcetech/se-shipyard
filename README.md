@@ -103,8 +103,15 @@ HTTPS), `API_TOKEN` (>= 24 chars, sent as `X-Api-Key` for scripts). Advanced:
 `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` (from `python -m app.auth hash`) +
 `SESSION_SECRET` override the file.
 
-It still mounts the Docker socket, which is root-equivalent: keep it on a
-trusted LAN, never the internet.
+### Docker access (socket proxy)
+
+Shipyard never touches the raw Docker socket. `compose.example.yaml` runs a
+`socket-proxy` sidecar with a custom allow-list and points Shipyard at it with
+`DOCKER_HOST=tcp://socket-proxy:2375`. Through it Shipyard can list, inspect,
+read logs and stats of containers, and start/stop/restart them. Create, exec,
+kill, delete, update, file access, images, volumes and networks are refused
+(403), so a compromised Shipyard is not root on the host. Keep the proxy's port
+unpublished and keep the whole thing on a trusted LAN, never the internet.
 
 ## Running locally
 
