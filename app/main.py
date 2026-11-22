@@ -83,7 +83,7 @@ input:focus{outline:2px solid #4c8dff;outline-offset:-1px}
 button{width:100%;margin-top:6px;background:#4c8dff;color:#06101f;border:0;border-radius:6px;padding:9px;
 font:inherit;font-weight:600;cursor:pointer}
 .err{color:#ff6b63;margin:0 0 12px;font-size:13px}
-</style></head><body><form method="post" action="/login">
+</style></head><body><form method="post" action="__ACTION__">
 <h1>SE Shipyard</h1>__ERR__
 __FIELDS__
 <button type="submit">__BTN__</button></form></body></html>"""
@@ -98,20 +98,20 @@ _SETUP_FIELDS = """<p style="color:#8c99ad;margin:0 0 14px">First run: create yo
 __TOKEN__"""
 
 
-def _page(fields: str, button: str, error: str = "", status: int = 200) -> HTMLResponse:
+def _page(fields: str, button: str, action: str, error: str = "", status: int = 200) -> HTMLResponse:
     err = f'<p class="err">{escape(error)}</p>' if error else ""
-    html = _LOGIN_HTML.replace("__FIELDS__", fields).replace("__BTN__", button).replace("__ERR__", err)
+    html = _LOGIN_HTML.replace("__FIELDS__", fields).replace("__BTN__", button).replace("__ACTION__", action).replace("__ERR__", err)
     return HTMLResponse(html, status_code=status, headers={"Cache-Control": "no-store"})
 
 
 def _login_page(error: str = "", status: int = 200) -> HTMLResponse:
-    return _page(_SIGNIN_FIELDS, "Sign in", error, status)
+    return _page(_SIGNIN_FIELDS, "Sign in", "/login", error, status)
 
 
 def _setup_page(error: str = "", status: int = 200) -> HTMLResponse:
     token = ('<label>Setup token<input name="token" type="password" required></label>'
              if cfg.setup_token else "")
-    return _page(_SETUP_FIELDS.replace("__TOKEN__", token), "Create login", error, status)
+    return _page(_SETUP_FIELDS.replace("__TOKEN__", token), "Create login", "/setup", error, status)
 
 
 def _form(body: bytes) -> dict[str, str]:
