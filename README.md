@@ -85,11 +85,26 @@ known gaps under Wine. So SE Shipyard works entirely by:
   can batch several changes first. Editing a *running* server's files can be
   overwritten by the game's own autosave; stop the server first for safety.
 
-## Security warning
+## Login
 
-SE Shipyard has **no authentication yet** and mounts the host's Docker socket,
-which is root-equivalent. Only expose it on a trusted LAN -- never to the
-internet -- until login support is added.
+Every page and API route requires a login (one admin user, session cookie,
+`SameSite=Strict`, Origin check on writes, failed-login throttling). `/docs` and
+`/openapi.json` are disabled.
+
+**First run works like Radarr/Sonarr:** open the page and it asks you to create
+a username and password. The password is stored as a scrypt hash, with a
+generated session secret, in `data/auth.json` (mode 0600) on the data volume.
+Until that is done nothing else is served, so complete it right after deploying.
+To reset, delete `data/auth.json` and restart.
+
+Optional environment variables: `SETUP_TOKEN` (the setup page also asks for it,
+closing the first-visit window), `SESSION_HOURS`, `COOKIE_SECURE=1` (behind
+HTTPS), `API_TOKEN` (>= 24 chars, sent as `X-Api-Key` for scripts). Advanced:
+`ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` (from `python -m app.auth hash`) +
+`SESSION_SECRET` override the file.
+
+It still mounts the Docker socket, which is root-equivalent: keep it on a
+trusted LAN, never the internet.
 
 ## Running locally
 

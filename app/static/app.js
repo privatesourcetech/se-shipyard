@@ -43,6 +43,7 @@ async function api(path, method = "GET", body) {
   let res;
   try { res = await fetch("/api" + path, opts); }
   catch (e) { throw new Error("Can't reach the Shipyard backend."); }
+  if (res.status === 401) { location.href = "/login"; throw new Error("Signed out"); }
   let data = null;
   try { data = await res.json(); } catch (e) { /* no body */ }
   if (!res.ok) {

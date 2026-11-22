@@ -11,6 +11,8 @@ services:
 
     environment:
       TZ: "UTC"
+      # Login is created on first visit (stored in the data volume). Optional:
+      # SETUP_TOKEN: ""   # if set, the first-run page also asks for this
       # Optional: Steam Web API key for Workshop search. Can also be set in the UI.
       # STEAM_API_KEY: ""
 
